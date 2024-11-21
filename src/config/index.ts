@@ -1,0 +1,1 @@
+export const sourceLink = `https://github.com/guocaoyi/create-chrome-ext`
