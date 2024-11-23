@@ -44,5 +44,6 @@ export default defineManifest({
     // 'sidePanel',
     'storage',
     'webNavigation',
+    'tabs'
   ],
 })

@@ -1,6 +1,12 @@
 export enum ERequest {
-  count = 'count',
+  COUNT = 'COUNT',
+
+  IS_IN_PROGRESS = 'IS_IN_PROGRESS',
+
   OPTIONS = 'OPTIONS',
-  vacancySearchUrl = 'vacancySearchUrl',
-  runTasks = 'runTasks'
+
+  RUN_TASKS = 'RUN_TASKS',
+  STOP_TASKS = 'STOP_TASKS',
+
+  IS_DEBUG = 'IS_DEBUG',
 }

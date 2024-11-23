@@ -1,5 +1,6 @@
+import { useLogging } from "../use/useLogging"
 import { onMessage } from "./onMessage"
 
-console.log('background is running')
+useLogging().logging('background is running')
 
 onMessage()

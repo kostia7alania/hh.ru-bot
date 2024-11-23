@@ -10,15 +10,34 @@
           placeholder="https://lipetsk.hh.ru/search/vacancy"
         />
       </label> -->
-      <label>
-        cover letter
+
+      <label class="items-col">
+        <input v-model="options.isRequiredCoverLetter" type="checkbox" />
+        Всегда прикреплять сопроводительное
+      </label>
+
+      <label class="items-row">
+        Сопроводительное
         <textarea
           rows="4"
           v-model="options.coverLetterText"
           placeholder="Добрый день! Рассмотрите, пожалуйста!"
         />
       </label>
-      <button :disabled="!isValid" class="start-button" @click="runTasks">Go</button>
+
+      <button v-if="!isProgress" :disabled="!isValid" class="start-button" @click="runTasks">
+        Go
+      </button>
+      <button v-else class="start-button" @click="stopTasks">Stop</button>
+
+      <div class="count-wrapper">
+        <div>Sent: {{ count }}</div>
+        <div class="count-buttons">
+          <button @click="increment">+</button>
+          <button @click="decrement">-</button>
+          <button @click="resetCount">Reset</button>
+        </div>
+      </div>
     </div>
 
     <a :href="sourceLink" target="_blank"> sources </a>
@@ -29,22 +48,42 @@
 import { ref, watch, onMounted, computed, reactive } from 'vue'
 import { ERequest } from '../types'
 import { sourceLink } from '../config'
-import { Options } from '../contentScript/options'
 
+import { isVacancyUrl, useCurrentTab } from '../utils'
+import { useIsProgress } from '../use/useIsProgress'
+import { useCount } from '../use/useCount'
+import { Options } from '../contentScript/types'
 
 const getOptionsDefault = () => ({
   coverLetterText: '',
   vacancySearchUrl: '',
+  isRequiredCoverLetter: false,
 })
+
 const options = ref<Options>(getOptionsDefault())
 
-const count = ref(0)
+const { count, reset: resetCount, increment, decrement } = useCount()
+
+const { currentTabUrl } = useCurrentTab()
+
+const isValid = computed(() => {
+  return isVacancyUrl(currentTabUrl.value)
+})
+
+const { isProgress, start, stop } = useIsProgress()
 
 const runTasks = () => {
-  chrome.runtime.sendMessage({ type: ERequest.runTasks, options: options.value })
+  chrome.runtime.sendMessage({ type: ERequest.RUN_TASKS, options: options.value })
+  start()
+  resetCount()
 }
 
-onMounted(async () => {
+const stopTasks = () => {
+  chrome.runtime.sendMessage({ type: ERequest.STOP_TASKS })
+  stop()
+}
+
+const init = async () => {
   options.value =
     (await chrome.storage.sync.get([ERequest.OPTIONS]))[ERequest.OPTIONS] ?? getOptionsDefault()
 
@@ -55,21 +94,9 @@ onMounted(async () => {
     },
     { deep: true },
   )
+}
 
-  count.value = (await chrome.storage.sync.get([ERequest.count]))[ERequest.count] ?? 0
-
-  watch(count, (newValue) => {
-    chrome.storage.sync.set({ [ERequest.count]: newValue })
-
-    chrome.runtime.sendMessage({ type: ERequest.count, value: newValue })
-  })
-})
-
-const isValid = computed(() => {
-  if (!options.value.vacancySearchUrl) return
-  const { host, pathname } = new URL(options.value.vacancySearchUrl)
-  return host?.endsWith('hh.ru') && pathname === '/search/vacancy'
-})
+init()
 </script>
 
 <style>
@@ -91,19 +118,8 @@ const isValid = computed(() => {
   background-color: #242424;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    background-color: #fafafa;
-  }
-
-  a:hover {
-    color: #42b983;
-  }
-}
-
 body {
   min-width: 20rem;
-  color-scheme: light dark;
 }
 
 main {
@@ -127,12 +143,24 @@ h3 {
   margin: 2rem;
   gap: 8px;
 
-  > label {
+  .items-col {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6rem;
+    input {
+      min-width: 10px;
+    }
+  }
+
+  .items-row {
     display: flex;
     flex-direction: column;
+    align-items: start;
     gap: 4px;
-    font-size: 1.1rem;
+    font-size: 0.6rem;
   }
+
   input,
   textarea {
     max-width: 100%;
@@ -166,6 +194,18 @@ a {
   }
   &:disabled {
     cursor: not-allowed;
+  }
+}
+.count-wrapper {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  
+  .count-buttons {
+    display: flex;
+    gap: 4px;
+    align-items: center;
   }
 }
 </style>

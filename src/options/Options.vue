@@ -1,20 +1,16 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed } from 'vue'
 import { ERequest } from '../types'
 import { sourceLink } from '../config'
+import { useSyncModel } from '../use/useSyncModel'
 
-const countSync = ref(0)
+const { model, setModel } = useSyncModel(ERequest.IS_DEBUG, true)
 
-onMounted(async () => {
-  const result = await chrome.storage.sync.get([ERequest.count])
-
-  countSync.value = result[ERequest.count] ?? 0
-
-  chrome.runtime.onMessage.addListener((request) => {
-    if (request.type === ERequest.count) {
-      countSync.value = request?.value ?? 0
-    }
-  })
+const isDebug = computed({
+  get: () => model.value,
+  set: (newValue) => {
+    setModel(newValue)
+  },
 })
 </script>
 
@@ -22,7 +18,11 @@ onMounted(async () => {
   <main>
     <h3>Options Page</h3>
 
-    <h4>Count from Popup: {{ countSync }}</h4>
+    <label>
+      Debug
+      {{ isDebug }}
+      <input v-model="isDebug" type="checkbox" />
+    </label>
 
     <a :href="sourceLink" target="_blank"> sources </a>
   </main>

@@ -1,1 +1,1 @@
-export const sourceLink = `https://github.com/guocaoyi/create-chrome-ext`
+export const sourceLink = `https://github.com/kostia7alania/hh.ru-bot`

@@ -1,121 +1,153 @@
-// minify with https://www.toptal.com/developers/javascript-minifier
+import { useCount } from '../use/useCount'
+import { useLogging } from '../use/useLogging'
+import { getWaitCancellable, triggerInputChange } from '../utils'
+import { selectors, tokens } from './config'
+import { ReportTypes, Options } from './types'
 
-import { getWait, triggerInputChange } from '../utils'
-import { Options } from './options'
+const report: Record<ReportTypes, any[]> = {
+  error: [],
+  withCoverLetter: [],
+  alreadyResponded: [],
+  addedToBlackList: [],
+  alreadyAddedToBlackList: [],
+}
 
-const errors = []
-const withCoverLetter = []
-const alreadyResponded = []
+const addReport = (reportItem: object, type: ReportTypes) => {
+  report[type].push(reportItem)
+}
 
-const addedToBlacklist = []
-const alreadyAddedToBlacklist = []
-
-const log = (...args) =>
-  console.log(
-    {
-      errors,
-      withCoverLetter,
-      alreadyResponded,
-      addedToBlacklist,
-      alreadyAddedToBlacklist,
-    },
-    ...args,
-  )
+const log = (...args: any) => useLogging().logging(...args)
 
 let options: Options = {
   coverLetterText: '',
+  isRequiredCoverLetter: false,
 }
 
-// const prevLoc = window.location.href
+const prevLoc = `${window.location.href}#from-go-back`
 
-// navigation.addEventListener('navigate', (e) => {
-//   // TODO: think about preventing leave the page
-//   console.error('GO BACK', e.destination.url)
-//   e.preventDefault()
-//   e.stopPropagation()
-//   e.stopImmediatePropagation()
-//   // history.back()
-//   window.location.href = prevLoc
-// })
+navigation.addEventListener('navigate', (e) => {
+  // TODO: think about preventing leave the page
+  console.error('GO BACK', e.destination.url)
+  e.preventDefault()
+  e.stopPropagation()
+  e.stopImmediatePropagation()
+  // history.back()
+  window.location.href = prevLoc
+})
 
+let cancelCallback = () => {}
+
+const getWait = (ms: number) => {
+  const { promise, cancel } = getWaitCancellable(ms)
+
+  cancelCallback = cancel
+
+  return promise
+}
 const runTasks = async () => {
-  const items = document.querySelectorAll("[class^='vacancy-card']")
+  const { increment } = useCount()
+
+  const items = document.querySelectorAll(selectors.vacancyCard)
   for (const [index, item] of items.entries()) {
     item.scrollIntoView({ behavior: 'smooth', block: 'center' })
     item.style.boxShadow = '0 0 5px red'
 
-    const jobTitle = item.querySelector("[data-qa='serp-item__title']")?.innerText
-    const jobHref = item.querySelector("[data-qa='serp-item__title']")?.href
+    const { innerText: jobTitle, href: jobHref } = item.querySelector(selectors.itemTitle) ?? {}
 
-    const target = item.querySelector("[data-qa='vacancy-serp__vacancy_response']")
+    const target = item.querySelector(selectors.responseButton)
 
-    if (['Respond', 'Откликнуться'].includes(target?.innerText)) {
+    if (tokens.responseButton.includes(target?.innerText)) {
       log(index, 'RESPOND', item)
 
       target.click()
       await getWait(2000)
 
       // Вы откликаетесь на вакансию в другой стране
-      document.querySelector('.bloko-modal-footer .bloko-button_kind-success')?.click()
+      document.querySelector(selectors.otherCountryActionButton)?.click()
 
-      const coverLetter = document.querySelector(
-        '[data-qa=vacancy-response-popup-form-letter-input]',
-      )
+      const coverLetterRequired = document.querySelector(selectors.coverLetterInputRequired)
 
-      if (coverLetter) {
-        triggerInputChange(coverLetter, options.coverLetterText)
+      if (coverLetterRequired) {
+        triggerInputChange(coverLetterRequired, options.coverLetterText)
 
-        withCoverLetter.push({ title: jobTitle, href: jobHref })
+        addReport({ title: jobTitle, href: jobHref }, 'withCoverLetter')
+      } else {
+        // если cover-letter не обязателен
+        if (options.isRequiredCoverLetter) {
+          item.querySelector(selectors.coverLetterActivator)?.click()
+
+          await getWait(400)
+
+          const coverLetter = document.querySelector(selectors.coverLetterInput)
+
+          if (coverLetter) {
+            triggerInputChange(coverLetter, options.coverLetterText)
+            item.querySelector(selectors.coverLetterSubmit)?.click()
+            await getWait(400)
+
+            addReport({ title: jobTitle, href: jobHref }, 'withCoverLetter')
+          }
+        }
       }
 
-      document.querySelector('.bloko-modal-footer .bloko-button_kind-primary')?.click()
+      document.querySelector(selectors.ifSeveralResumesModalActionButton)?.click() // TODO уточнить
 
       await getWait(1111)
 
-      const errorText = document.querySelector('.vacancy-response-popup-error')?.innerText
-      if (errorText) {
-        errors.push({ title: jobTitle, href: jobHref, error: errorText })
-        document.querySelector('[data-qa=vacancy-response-popup-close-button]')?.click() // close modal
+      const { innerText: error } = document.querySelector(selectors.errorText) ?? {}
+      if (error) {
+        addReport({ title: jobTitle, href: jobHref, error }, 'error')
+        document.querySelector(selectors.errorModalCloseButton)?.click() // close modal
         continue
       }
     } else {
-      alreadyResponded.push({ title: jobTitle, href: jobHref })
+      addReport({ title: jobTitle, href: jobHref }, 'alreadyResponded')
       log(index, 'already RESPONDED', item)
     }
 
     await getWait(100)
 
-    const blacklist = item.querySelector('[data-qa=vacancy__blacklist-show-add]')
+    const blacklist = item.querySelector(selectors.blackListMenuShow)
 
     if (blacklist) {
       blacklist.click()
       await getWait(100)
-      document.querySelector('[data-qa=vacancy__blacklist-menu-add-vacancy]')?.click()
+      document.querySelector(selectors.blackListCurrentVacancy)?.click()
 
-      addedToBlacklist.push({ title: jobTitle, href: jobHref })
+      addReport({ title: jobTitle, href: jobHref }, 'addedToBlackList')
       log(index, 'TO BLACK LIST', item)
     } else {
-      alreadyAddedToBlacklist.push({ title: jobTitle, href: jobHref })
+      addReport({ title: jobTitle, href: jobHref }, 'alreadyAddedToBlackList')
       log(index, 'already blacklisted', item)
     }
 
     await getWait(1000)
     item.style.boxShadow = ''
+
+    const isSuccess = item.querySelector(selectors.vacancyRespondedSuccess)
+
+    if (isSuccess) {
+      increment()
+    }
   }
 
-  const next = document.querySelector('[data-qa="pager-next"]')
+  const next = document.querySelector(selectors.pagerNext)
+
   if (next) {
     next.click()
     await getWait(4000)
-    runTasks()
     log('GO TO NEXT PAGE')
+    return runTasks()
   }
 }
 
 export const getRunTasks = (optionsNew: Options) => {
-  console.log({ optionsNew })
+  log('[getRunTasks]', optionsNew)
 
   options = optionsNew
 
-  return runTasks
+  return {
+    promise: runTasks(),
+    stop: () => cancelCallback(),
+  }
 }
